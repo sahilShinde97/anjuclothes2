@@ -8,11 +8,15 @@ const currencyFormatter = new Intl.NumberFormat('en-IN', {
 })
 
 function ProductCard({ product }) {
+  const discountPercentage = product.discountPercentage || 0
+  const discountedPrice = discountPercentage > 0 ? Math.round(product.price * (1 - discountPercentage / 100)) : product.price
+
   return (
     <article className="group overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#141416] shadow-glow transition duration-300 hover:-translate-y-1 hover:scale-[1.01] hover:border-gold/50">
       <Link to={`/products/${product._id}`} className="block w-full text-left">
-        <div className="aspect-[4/5] overflow-hidden">
+        <div className="relative aspect-[4/5] overflow-hidden">
           <ImageWithFallback src={product.image} alt={product.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+          {discountPercentage > 0 ? <span className="absolute left-3 top-3 rounded-full bg-red-500 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white">{discountPercentage}% OFF</span> : null}
         </div>
 
         <div className="space-y-3 p-4 sm:p-5">
@@ -27,7 +31,12 @@ function ProductCard({ product }) {
             {product.name}
           </h3>
 
-          <p className="text-xl font-semibold text-gold">{currencyFormatter.format(product.price)}</p>
+          <div>
+            <p className="text-xl font-semibold text-gold">{currencyFormatter.format(discountedPrice)}</p>
+            {discountPercentage > 0 ? <p className="mt-1 text-sm text-white/45 line-through">{currencyFormatter.format(product.price)}</p> : null}
+          </div>
+
+          {(product.sizes || []).length > 0 ? <p className="text-xs uppercase tracking-[0.16em] text-white/45">Sizes: {product.sizes.join(', ')}</p> : null}
 
           <span className="inline-flex min-h-[46px] w-full items-center justify-center rounded-full bg-gold px-4 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-black transition group-hover:bg-[#e5c17f]">
             View Details

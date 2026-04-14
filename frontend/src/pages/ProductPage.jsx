@@ -42,6 +42,8 @@ function ProductPage() {
   }, [id])
 
   const pageUrl = typeof window !== 'undefined' ? window.location.href : ''
+  const discountPercentage = product?.discountPercentage || 0
+  const discountedPrice = product ? Math.round(product.price * (1 - discountPercentage / 100)) : 0
   usePageMeta({
     title: product ? `${product.name} | ANJU CLOTHES` : 'Product | ANJU CLOTHES',
     description: product ? `${product.name} in ${product.category}${product.subcategory ? ` - ${product.subcategory}` : ''}. Buy directly from ANJU CLOTHES.` : 'ANJU CLOTHES product details page.',
@@ -147,11 +149,16 @@ function ProductPage() {
             </div>
 
             <h1 className="mt-4 max-w-lg font-heading text-4xl leading-none text-white sm:text-5xl">{product.name}</h1>
-            <p className="mt-4 text-2xl font-semibold text-gold">{currencyFormatter.format(product.price)}</p>
+            <div className="mt-4">
+              <p className="text-2xl font-semibold text-gold">{currencyFormatter.format(discountedPrice)}</p>
+              {discountPercentage > 0 ? <p className="mt-1 text-sm text-white/45 line-through">{currencyFormatter.format(product.price)}</p> : null}
+            </div>
+            {discountPercentage > 0 ? <p className="mt-2 inline-flex rounded-full bg-red-500 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-white">{discountPercentage}% OFF</p> : null}
             <p className="mt-4 max-w-md text-sm leading-7 text-white/65">{product.description || 'Premium product details page built for direct mobile checkout.'}</p>
             <p className={`mt-3 text-sm font-medium ${product.stock > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
               {product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}
             </p>
+            {(product.sizes || []).length > 0 ? <p className="mt-2 text-sm text-white/70">Available sizes: {product.sizes.join(', ')}</p> : null}
 
             <div className="mt-5 flex flex-wrap gap-3">
               <button type="button" disabled={product.stock <= 0} onClick={handleBuyNow} className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-gold px-5 text-sm font-semibold uppercase tracking-[0.18em] text-black transition hover:bg-[#e5c17f] disabled:opacity-50">

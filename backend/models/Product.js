@@ -18,6 +18,12 @@ const productSchema = new mongoose.Schema(
       min: 0,
       default: 10,
     },
+    discountPercentage: {
+      type: Number,
+      min: 0,
+      max: 90,
+      default: 0,
+    },
     category: {
       type: String,
       required: true,
@@ -28,6 +34,10 @@ const productSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: '',
+    },
+    sizes: {
+      type: [String],
+      default: [],
     },
     description: {
       type: String,

@@ -9,6 +9,7 @@ export async function getProducts(req, res, next) {
     const subcategory = req.query.subcategory?.trim()
     const sort = req.query.sort?.trim() || 'newest'
     const priceRange = req.query.priceRange?.trim()
+    const offersOnly = req.query.offersOnly === 'true'
 
     const filter = {}
 
@@ -34,6 +35,10 @@ export async function getProducts(req, res, next) {
 
     if (priceRange === '2000-plus') {
       filter.price = { $gte: 2000 }
+    }
+
+    if (offersOnly) {
+      filter.discountPercentage = { $gt: 0 }
     }
 
     const sortMap = {
@@ -85,7 +90,7 @@ export async function getProductById(req, res, next) {
 
 export async function createProduct(req, res, next) {
   try {
-    const { name, price, stock, image, images, category, subcategory, description } = req.body
+    const { name, price, stock, discountPercentage, sizes, image, images, category, subcategory, description } = req.body
 
     const normalizedImages = Array.isArray(images) ? images.filter(Boolean).slice(0, 3) : []
     const primaryImage = normalizedImages[0] || image
@@ -94,6 +99,8 @@ export async function createProduct(req, res, next) {
       name,
       price,
       stock,
+      discountPercentage: Number(discountPercentage) || 0,
+      sizes: Array.isArray(sizes) ? sizes.filter(Boolean) : [],
       image: primaryImage,
       images: normalizedImages.length > 0 ? normalizedImages : primaryImage ? [primaryImage] : [],
       category,
@@ -108,7 +115,7 @@ export async function createProduct(req, res, next) {
 
 export async function updateProduct(req, res, next) {
   try {
-    const { name, price, stock, image, images, category, subcategory, description } = req.body
+    const { name, price, stock, discountPercentage, sizes, image, images, category, subcategory, description } = req.body
 
     const normalizedImages = Array.isArray(images) ? images.filter(Boolean).slice(0, 3) : []
     const primaryImage = normalizedImages[0] || image
@@ -119,6 +126,8 @@ export async function updateProduct(req, res, next) {
         name,
         price,
         stock,
+        discountPercentage: Number(discountPercentage) || 0,
+        sizes: Array.isArray(sizes) ? sizes.filter(Boolean) : [],
         image: primaryImage,
         images: normalizedImages.length > 0 ? normalizedImages : primaryImage ? [primaryImage] : [],
         category,

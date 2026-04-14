@@ -15,6 +15,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
 import OrderSuccessPage from './pages/OrderSuccessPage'
+import OffersPage from './pages/OffersPage'
 import OrderDetailPage from './pages/OrderDetailPage'
 import ProductPage from './pages/ProductPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
@@ -28,6 +29,7 @@ function App() {
           <Routes>
             <Route element={<Layout />}>
               <Route path="/" element={<HomePage />} />
+              <Route path="/offers" element={<OffersPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/products/:id" element={<ProductPage />} />

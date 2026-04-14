@@ -30,6 +30,9 @@ function Layout() {
             <NavLink to="/" className="rounded-full px-4 py-2 text-sm text-white/75 transition hover:text-gold">
               Home
             </NavLink>
+            <NavLink to="/offers" className="rounded-full px-4 py-2 text-sm text-white/75 transition hover:text-gold">
+              Offers
+            </NavLink>
             {!user ? (
               <>
                 <NavLink to="/login" className="rounded-full border border-white/10 px-4 py-2 text-sm text-white transition hover:bg-white/5">
@@ -100,6 +103,7 @@ function Layout() {
             <p className="font-semibold uppercase tracking-[0.18em] text-white/85">Quick Links</p>
             <div className="mt-2 flex flex-wrap gap-2">
               <Link to="/" className="rounded-full border border-white/10 px-3 py-2 transition hover:bg-white/5">Store</Link>
+              <Link to="/offers" className="rounded-full border border-white/10 px-3 py-2 transition hover:bg-white/5">Offers</Link>
               {!user ? <Link to="/login" className="rounded-full border border-white/10 px-3 py-2 transition hover:bg-white/5">Login</Link> : null}
               {user ? <Link to="/account" className="rounded-full border border-white/10 px-3 py-2 transition hover:bg-white/5">Account</Link> : null}
               {user?.role === 'admin' ? <Link to="/admin" className="rounded-full border border-white/10 px-3 py-2 transition hover:bg-white/5">Admin</Link> : null}
@@ -122,7 +126,7 @@ function Layout() {
       <nav className="fixed inset-x-4 bottom-4 z-30 rounded-full border border-white/10 bg-[#111113]/95 p-2 shadow-glow backdrop-blur sm:hidden">
         <div className="grid grid-cols-4 gap-2 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-white/75">
           <Link to="/" className="rounded-full px-3 py-2">Home</Link>
-          {user ? <Link to="/account" className="rounded-full px-3 py-2">Orders</Link> : <a href="#products" className="rounded-full px-3 py-2">Shop</a>}
+          <Link to="/offers" className="rounded-full px-3 py-2">Offers</Link>
           {user ? <Link to="/cart" className="rounded-full px-3 py-2">Cart</Link> : <Link to="/login" className="rounded-full px-3 py-2">Login</Link>}
           <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="rounded-full px-3 py-2">Chat</a>
         </div>
