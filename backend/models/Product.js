@@ -35,6 +35,23 @@ const productSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    groupId: {
+      type: String,
+      trim: true,
+      default: '',
+      index: true,
+    },
+    colorName: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    colorHex: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: '',
+    },
     sizes: {
       type: [String],
       default: [],
@@ -52,6 +69,38 @@ const productSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: '',
+    },
+    reviews: {
+      type: [
+        {
+          user: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            required: true,
+          },
+          name: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+          rating: {
+            type: Number,
+            required: true,
+            min: 1,
+            max: 5,
+          },
+          comment: {
+            type: String,
+            trim: true,
+            default: '',
+          },
+          createdAt: {
+            type: Date,
+            default: Date.now,
+          },
+        },
+      ],
+      default: [],
     },
   },
   { timestamps: true },

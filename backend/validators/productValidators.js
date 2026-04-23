@@ -6,6 +6,13 @@ export const createOrUpdateProductValidator = [
   body('stock').isInt({ min: 0 }).withMessage('Stock must be 0 or more.'),
   body('discountPercentage').optional().isFloat({ min: 0, max: 90 }).withMessage('Discount should be between 0 and 90.'),
   body('category').trim().notEmpty().withMessage('Category is required.'),
+  body('groupId').optional({ values: 'falsy' }).trim().isLength({ max: 60 }).withMessage('Group id is invalid.'),
+  body('colorName').optional({ values: 'falsy' }).trim().isLength({ max: 40 }).withMessage('Color name is invalid.'),
+  body('colorHex')
+    .optional({ values: 'falsy' })
+    .trim()
+    .matches(/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/)
+    .withMessage('Color code must be a valid hex code.'),
   body('description').optional({ values: 'falsy' }).trim().isString(),
   body('sizes').optional().isArray().withMessage('Sizes must be an array.'),
   body('sizes.*').optional().isString(),
@@ -29,4 +36,10 @@ export const productIdValidator = [param('id').isMongoId().withMessage('Valid pr
 export const productQueryValidator = [
   query('page').optional().isInt({ min: 1 }).withMessage('Page must be at least 1.'),
   query('limit').optional().isInt({ min: 1, max: 50 }).withMessage('Limit must be between 1 and 50.'),
+  query('groupId').optional({ values: 'falsy' }).trim().isLength({ max: 60 }).withMessage('Group id is invalid.'),
+]
+
+export const createProductReviewValidator = [
+  body('rating').isFloat({ min: 1, max: 5 }).withMessage('Rating should be between 1 and 5.'),
+  body('comment').optional({ values: 'falsy' }).trim().isLength({ max: 500 }).withMessage('Review comment is too long.'),
 ]

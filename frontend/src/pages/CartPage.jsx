@@ -26,16 +26,21 @@ function CartPage() {
         <section className="grid gap-6 lg:grid-cols-[1fr_320px]">
           <div className="space-y-3">
             {items.map((item) => (
-              <div key={item.productId} className="flex items-center gap-3 rounded-[1.2rem] border border-white/10 bg-[#141416] p-4">
+              <div key={item.key || `${item.productId}-${item.size}`} className="flex items-center gap-3 rounded-[1.2rem] border border-white/10 bg-[#141416] p-4">
                 <img src={item.image} alt={item.name} className="h-20 w-20 rounded-xl object-cover" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold text-white">{item.name}</p>
-                  <p className="mt-1 text-sm text-gold">{currencyFormatter.format(item.price)}</p>
+                  {item.size ? <p className="mt-1 text-xs text-white/55">Size: {item.size}</p> : null}
+                  <div className="mt-1">
+                    <p className="text-sm text-gold">{currencyFormatter.format(item.finalPrice ?? item.price)}</p>
+                    {(item.discountPercentage || 0) > 0 ? <p className="text-xs text-white/45 line-through">{currencyFormatter.format(item.originalPrice)}</p> : null}
+                    {(item.discountPercentage || 0) > 0 ? <p className="text-xs text-red-300">{item.discountPercentage}% OFF</p> : null}
+                  </div>
                   <div className="mt-3 flex items-center gap-2">
-                    <button type="button" onClick={() => updateQuantity(item.productId, item.quantity - 1)} className="h-8 w-8 rounded-full border border-white/10">-</button>
+                    <button type="button" onClick={() => updateQuantity(item.productId, item.quantity - 1, { size: item.size })} className="h-8 w-8 rounded-full border border-white/10">-</button>
                     <span className="w-8 text-center text-sm">{item.quantity}</span>
-                    <button type="button" onClick={() => updateQuantity(item.productId, item.quantity + 1)} className="h-8 w-8 rounded-full border border-white/10">+</button>
-                    <button type="button" onClick={() => { removeFromCart(item.productId); addToast({ title: 'Removed from cart.' }) }} className="ml-3 text-sm text-red-400">Remove</button>
+                    <button type="button" onClick={() => updateQuantity(item.productId, item.quantity + 1, { size: item.size })} className="h-8 w-8 rounded-full border border-white/10">+</button>
+                    <button type="button" onClick={() => { removeFromCart(item.productId, { size: item.size }); addToast({ title: 'Removed from cart.' }) }} className="ml-3 text-sm text-red-400">Remove</button>
                   </div>
                 </div>
               </div>

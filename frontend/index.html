@@ -13,9 +13,52 @@
     <meta name="twitter:title" content="ANJU CLOTHES | Women Fashion Store" />
     <meta name="twitter:description" content="Shop women fashion with direct checkout, mobile-friendly browsing, and WhatsApp support." />
     <meta name="twitter:image" content="https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1200&q=80" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <title>ANJU CLOTHES</title>
+    <style>
+      #app-loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 12px;
+        background: #0b0b0c;
+        color: #fff;
+        z-index: 9999;
+        font-family: "Manrope", sans-serif;
+      }
+
+      .loader-ring {
+        width: 44px;
+        height: 44px;
+        border: 3px solid rgba(255, 255, 255, 0.2);
+        border-top-color: #d4a24f;
+        border-radius: 50%;
+        animation: spin 0.9s linear infinite;
+      }
+
+      .loader-text {
+        font-size: 12px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.75);
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
   </head>
   <body>
+    <div id="app-loader" role="status" aria-live="polite">
+      <div class="loader-ring"></div>
+      <div class="loader-text">Loading ANJU CLOTHES</div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

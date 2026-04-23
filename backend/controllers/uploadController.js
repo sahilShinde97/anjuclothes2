@@ -10,13 +10,20 @@ export async function createUploadSignature(_req, res, next) {
 
     const timestamp = Math.floor(Date.now() / 1000)
     const folder = 'anju-clothes/products'
-    const signature = cloudinary.utils.api_sign_request({ timestamp, folder }, process.env.CLOUDINARY_API_SECRET)
+    const allowedFormats = 'jpg,jpeg,png,webp'
+    const transformation = 'f_auto,q_auto'
+    const signature = cloudinary.utils.api_sign_request(
+      { timestamp, folder, allowed_formats: allowedFormats, transformation },
+      process.env.CLOUDINARY_API_SECRET,
+    )
 
     res.json({
       cloudName: process.env.CLOUDINARY_CLOUD_NAME,
       apiKey: process.env.CLOUDINARY_API_KEY,
       timestamp,
       folder,
+      allowedFormats,
+      transformation,
       signature,
     })
   } catch (error) {

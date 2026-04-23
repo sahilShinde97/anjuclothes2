@@ -32,6 +32,15 @@ export function AuthProvider({ children }) {
   }, [])
 
   useEffect(() => {
+    const handleAuthExpired = () => {
+      setUser(null)
+    }
+
+    window.addEventListener('anju-auth-expired', handleAuthExpired)
+    return () => window.removeEventListener('anju-auth-expired', handleAuthExpired)
+  }, [])
+
+  useEffect(() => {
     if (user?.role !== 'admin') {
       if (activityTimeoutRef.current) {
         window.clearTimeout(activityTimeoutRef.current)

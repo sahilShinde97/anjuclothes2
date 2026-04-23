@@ -1,5 +1,10 @@
 import Order from '../models/Order.js'
 import Product from '../models/Product.js'
+import { getDiscountedPrice, getEffectiveProductImages, getSafeDiscountPercentage } from '../utils/productVariantUtils.js'
+
+function buildCartItemKey(productId, size) {
+  return `${productId}::${size || ''}`
+}
 
 function serializeUser(user) {
   return {
@@ -43,13 +48,25 @@ export async function getCart(req, res, next) {
 
     const items = req.user.cart
       .filter((item) => item.product)
-      .map((item) => ({
-        productId: item.product._id,
-        name: item.product.name,
-        price: item.product.price,
-        image: (item.product.images && item.product.images[0]) || item.product.image,
-        quantity: item.quantity,
-      }))
+      .map((item) => {
+        const fallbackImages = getEffectiveProductImages(item.product)
+        const originalPrice = Math.max(Number(item.product.price) || 0, 0)
+        const discountPercentage = getSafeDiscountPercentage(item.product.discountPercentage)
+        const finalPrice = getDiscountedPrice(item.product)
+        return {
+          key: buildCartItemKey(item.product._id, item.size),
+          productId: item.product._id,
+          name: item.product.name,
+          price: finalPrice,
+          discountedPrice: finalPrice,
+          finalPrice,
+          originalPrice,
+          discountPercentage,
+          image: fallbackImages[0] || '',
+          quantity: item.quantity,
+          size: item.size || '',
+        }
+      })
 
     res.json({ items })
   } catch (error) {
@@ -59,18 +76,39 @@ export async function getCart(req, res, next) {
 
 export async function addToCart(req, res, next) {
   try {
-    const { productId, quantity = 1 } = req.body
+    const { productId, quantity = 1, size = '' } = req.body
     const product = await Product.findById(productId)
 
     if (!product) {
       return res.status(404).json({ message: 'Product not found.' })
     }
 
-    const existing = req.user.cart.find((item) => String(item.product) === String(productId))
+    const safeSize = typeof size === 'string' ? size.trim() : ''
+    const parsedQuantity = Math.max(Number(quantity) || 1, 1)
+
+    const existing = req.user.cart.find(
+      (item) =>
+        String(item.product) === String(productId) &&
+        (item.size || '') === safeSize,
+    )
+
+    const currentQuantity = existing ? Number(existing.quantity) || 0 : 0
+    const nextQuantity = currentQuantity + parsedQuantity
+
+    if (nextQuantity > product.stock) {
+      return res.status(400).json({
+        message: `Only ${product.stock} item(s) available in stock.`,
+      })
+    }
+
     if (existing) {
-      existing.quantity += Number(quantity) || 1
+      existing.quantity += parsedQuantity
     } else {
-      req.user.cart.push({ product: productId, quantity: Number(quantity) || 1 })
+      req.user.cart.push({
+        product: productId,
+        quantity: parsedQuantity,
+        size: safeSize,
+      })
     }
 
     await req.user.save()
@@ -84,17 +122,43 @@ export async function addToCart(req, res, next) {
 
 export async function updateCartItem(req, res, next) {
   try {
-    const { quantity } = req.body
-    const item = req.user.cart.find((cartItem) => String(cartItem.product) === String(req.params.productId))
+    const { quantity, size = '' } = req.body
+    const targetProductId = req.params.productId
+    const safeSize = typeof size === 'string' ? size.trim() : ''
+    const item = req.user.cart.find(
+      (cartItem) =>
+        String(cartItem.product) === String(targetProductId) &&
+        (cartItem.size || '') === safeSize,
+    )
 
     if (!item) {
       return res.status(404).json({ message: 'Cart item not found.' })
     }
 
-    if (quantity <= 0) {
-      req.user.cart = req.user.cart.filter((cartItem) => String(cartItem.product) !== String(req.params.productId))
+    const parsedQuantity = Number(quantity)
+
+    if (parsedQuantity <= 0) {
+      req.user.cart = req.user.cart.filter(
+        (cartItem) =>
+          !(
+            String(cartItem.product) === String(targetProductId) &&
+            (cartItem.size || '') === safeSize
+          ),
+      )
     } else {
-      item.quantity = Number(quantity)
+      const product = await Product.findById(targetProductId)
+
+      if (!product) {
+        return res.status(404).json({ message: 'Product not found.' })
+      }
+
+      if (parsedQuantity > product.stock) {
+        return res.status(400).json({
+          message: `Only ${product.stock} item(s) available in stock.`,
+        })
+      }
+
+      item.quantity = parsedQuantity
     }
 
     await req.user.save()
@@ -106,7 +170,14 @@ export async function updateCartItem(req, res, next) {
 
 export async function removeCartItem(req, res, next) {
   try {
-    req.user.cart = req.user.cart.filter((cartItem) => String(cartItem.product) !== String(req.params.productId))
+    const safeSize = typeof req.query.size === 'string' ? req.query.size.trim() : ''
+    req.user.cart = req.user.cart.filter(
+      (cartItem) =>
+        !(
+          String(cartItem.product) === String(req.params.productId) &&
+          (cartItem.size || '') === safeSize
+        ),
+    )
     await req.user.save()
     res.json({ message: 'Cart item removed.' })
   } catch (error) {

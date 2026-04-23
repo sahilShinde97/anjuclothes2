@@ -243,7 +243,13 @@ function HomePage({ offersOnly = false }) {
             {activeBanner ? (
               <div className="relative h-full overflow-hidden rounded-[1.4rem]">
                 <div onTouchStart={handleBannerTouchStart} onTouchEnd={handleBannerTouchEnd}>
-                  <ImageWithFallback src={activeBanner.image} alt={activeBanner.title} className="h-[260px] w-full object-cover sm:h-[360px] lg:h-full" />
+                  <ImageWithFallback
+                    src={activeBanner.image}
+                    alt={activeBanner.title}
+                    loading="eager"
+                    fetchPriority="high"
+                    className="h-[260px] w-full object-cover sm:h-[360px] lg:h-full"
+                  />
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
                 <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5">
@@ -269,7 +275,13 @@ function HomePage({ offersOnly = false }) {
                 </div>
               </div>
             ) : featuredProduct ? (
-              <ImageWithFallback src={featuredProduct.image} alt={featuredProduct.name} className="h-[260px] w-full rounded-[1.4rem] object-cover sm:h-[360px] lg:h-full" />
+              <ImageWithFallback
+                src={featuredProduct.image}
+                alt={featuredProduct.name}
+                loading="eager"
+                fetchPriority="high"
+                className="h-[260px] w-full rounded-[1.4rem] object-cover sm:h-[360px] lg:h-full"
+              />
             ) : (
               <div className="flex h-[260px] items-center justify-center rounded-[1.4rem] bg-white/5 text-white/60 sm:h-[360px] lg:h-full">
                 No products yet
@@ -301,7 +313,7 @@ function HomePage({ offersOnly = false }) {
           ))}
         </div>
 
-        {selectedCategory === 'Undergarments' && subcategories.length > 1 ? (
+        {selectedCategory !== 'All' && subcategories.length > 1 ? (
           <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
             {subcategories.map((subcategory) => (
               <button
@@ -357,14 +369,14 @@ function HomePage({ offersOnly = false }) {
         {error ? <div className="text-red-400">{error}</div> : null}
 
         {loading ? (
-          <div className="grid grid-cols-1 gap-4 min-[430px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
             {Array.from({ length: 8 }).map((_, index) => (
               <SkeletonCard key={index} />
             ))}
           </div>
         ) : products.length > 0 ? (
           <>
-            <div className="grid grid-cols-1 gap-4 min-[430px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
                {products.filter((product) => product.category !== 'Saree' && (offersOnly ? (product.discountPercentage || 0) > 0 : true)).map((product) => (
                  <ProductCard key={product._id} product={product} />
                ))}

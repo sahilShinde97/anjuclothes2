@@ -6,6 +6,9 @@ import User from '../models/User.js'
 
 function createToken(userId, role) {
   const expiresIn = role === 'admin' ? '8h' : '7d'
+  if (!process.env.JWT_SECRET) {
+    throw new Error('JWT is not configured.')
+  }
   return jwt.sign({ userId, role }, process.env.JWT_SECRET, { expiresIn })
 }
 

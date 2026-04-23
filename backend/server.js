@@ -1,7 +1,6 @@
 import cors from 'cors'
 import dotenv from 'dotenv'
 import express from 'express'
-import rateLimit from 'express-rate-limit'
 import helmet from 'helmet'
 import Banner from './models/Banner.js'
 import connectDB from './config/db.js'
@@ -16,18 +15,44 @@ import paymentRoutes from './routes/paymentRoutes.js'
 import productRoutes from './routes/productRoutes.js'
 import uploadRoutes from './routes/uploadRoutes.js'
 import userRoutes from './routes/userRoutes.js'
+import { apiLimiter, authLimiter, sensitiveLimiter } from './middleware/rateLimitMiddleware.js'
+import { sanitizeRequest } from './middleware/securityMiddleware.js'
 
 dotenv.config()
 
 const app = express()
 const PORT = process.env.PORT || 5000
-const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false })
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false })
 
+function parseAllowedOrigins() {
+  const rawOrigins = process.env.CLIENT_URLS || process.env.CLIENT_URL || 'http://localhost:5173'
+  return rawOrigins
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+}
+
+if (process.env.NODE_ENV === 'production') {
+  const requiredEnv = ['MONGODB_URI', 'JWT_SECRET', 'RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'CLOUDINARY_API_SECRET']
+  const missing = requiredEnv.filter((key) => !process.env[key])
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`)
+  }
+}
 app.use(helmet())
+const allowedOrigins = parseAllowedOrigins()
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin(origin, callback) {
+      if (!origin) {
+        return callback(null, true)
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true)
+      }
+
+      return callback(new Error('CORS origin not allowed.'))
+    },
   }),
 )
 app.use(apiLimiter)
@@ -46,18 +71,19 @@ app.post(
   handleWebhook,
 )
 app.use(express.json())
+app.use(sanitizeRequest)
 
 app.get('/api/health', (_req, res) => {
   res.json({ message: 'Server is running' })
 })
 
 app.use('/api/auth', authLimiter, authRoutes)
-app.use('/api/admin', adminRoutes)
+app.use('/api/admin', sensitiveLimiter, adminRoutes)
 app.use('/api/banners', bannerRoutes)
 app.use('/api/payments', paymentRoutes)
 app.use('/api/products', productRoutes)
-app.use('/api/uploads', uploadRoutes)
-app.use('/api/users', userRoutes)
+app.use('/api/uploads', sensitiveLimiter, uploadRoutes)
+app.use('/api/users', sensitiveLimiter, userRoutes)
 
 app.use((err, _req, res, _next) => {
   res.status(err.statusCode || 500).json({
@@ -69,18 +95,22 @@ async function startServer() {
   try {
     await connectDB()
 
-    const totalProducts = await Product.countDocuments()
+    const shouldSeed = process.env.SEED_SAMPLE_DATA === 'true'
 
-    if (totalProducts === 0) {
-      await Product.insertMany(sampleProducts)
-      console.log('Sample products inserted')
-    }
+    if (shouldSeed) {
+      const totalProducts = await Product.countDocuments()
 
-    const totalBanners = await Banner.countDocuments()
+      if (totalProducts === 0) {
+        await Product.insertMany(sampleProducts)
+        console.log('Sample products inserted')
+      }
 
-    if (totalBanners === 0) {
-      await Banner.insertMany(sampleBanners)
-      console.log('Sample banners inserted')
+      const totalBanners = await Banner.countDocuments()
+
+      if (totalBanners === 0) {
+        await Banner.insertMany(sampleBanners)
+        console.log('Sample banners inserted')
+      }
     }
 
     app.listen(PORT, () => {

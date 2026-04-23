@@ -6,6 +6,7 @@ import { useToast } from '../context/ToastContext'
 import { apiRequest } from '../lib/api'
 
 const currencyFormatter = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })
+const createIdempotencyKey = () => `${Date.now()}-${Math.random().toString(36).slice(2, 14)}`
 
 function CheckoutPage() {
   const { user } = useAuth()
@@ -44,8 +45,10 @@ function CheckoutPage() {
 
     setLoading(true)
     try {
+      const idempotencyKey = createIdempotencyKey()
       const data = await apiRequest('/payments/create-order', {
         method: 'POST',
+        headers: { 'x-idempotency-key': idempotencyKey },
         body: JSON.stringify({ phone: user.phone, address: user.address, paymentMethod }),
       })
 
@@ -135,8 +138,11 @@ function CheckoutPage() {
           <p className="text-sm uppercase tracking-[0.22em] text-gold">Order summary</p>
           <div className="mt-4 space-y-3">
             {items.map((item) => (
-              <div key={item.productId} className="flex items-center justify-between gap-3 text-sm text-white/70">
-                <span>{item.name} x {item.quantity}</span>
+              <div key={item.key || `${item.productId}-${item.size}`} className="flex items-center justify-between gap-3 text-sm text-white/70">
+                <span>
+                  {item.name} x {item.quantity}
+                  {item.size ? <span className="block text-xs text-white/45">Size: {item.size}</span> : null}
+                </span>
                 <span>{currencyFormatter.format(item.price * item.quantity)}</span>
               </div>
             ))}

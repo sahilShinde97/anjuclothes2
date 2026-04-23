@@ -30,10 +30,23 @@ const orderSchema = new mongoose.Schema(
           type: Number,
           required: true,
         },
+        originalPrice: {
+          type: Number,
+          required: true,
+        },
+        discountPercentage: {
+          type: Number,
+          default: 0,
+        },
         quantity: {
           type: Number,
           required: true,
           min: 1,
+        },
+        size: {
+          type: String,
+          trim: true,
+          default: '',
         },
       },
     ],
@@ -96,6 +109,16 @@ const orderSchema = new mongoose.Schema(
     webhookVerified: {
       type: Boolean,
       default: false,
+    },
+    idempotencyKey: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    cartSignature: {
+      type: String,
+      trim: true,
+      default: '',
     },
     statusHistory: [
       {

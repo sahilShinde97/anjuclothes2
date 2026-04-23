@@ -28,24 +28,33 @@ export function CartProvider({ children }) {
     refreshCart().catch(() => setItems([]))
   }, [user?.id])
 
-  const addToCart = async (product) => {
+  const addToCart = async (product, variant = {}) => {
     await apiRequest('/users/cart', {
       method: 'POST',
-      body: JSON.stringify({ productId: product._id, quantity: 1 }),
+      body: JSON.stringify({
+        productId: product._id,
+        quantity: 1,
+        size: variant.size || '',
+      }),
     })
     await refreshCart()
   }
 
-  const updateQuantity = async (productId, quantity) => {
+  const updateQuantity = async (productId, quantity, variant = {}) => {
     await apiRequest(`/users/cart/${productId}`, {
       method: 'PUT',
-      body: JSON.stringify({ quantity }),
+      body: JSON.stringify({ quantity, size: variant.size || '' }),
     })
     await refreshCart()
   }
 
-  const removeFromCart = async (productId) => {
-    await apiRequest(`/users/cart/${productId}`, { method: 'DELETE' })
+  const removeFromCart = async (productId, variant = {}) => {
+    const params = new URLSearchParams()
+    if (variant.size) {
+      params.set('size', variant.size)
+    }
+    const query = params.toString()
+    await apiRequest(`/users/cart/${productId}${query ? `?${query}` : ''}`, { method: 'DELETE' })
     await refreshCart()
   }
 

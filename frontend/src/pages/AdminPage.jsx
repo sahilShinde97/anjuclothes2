@@ -10,12 +10,14 @@ const productInitialState = {
   price: '',
   stock: '0',
   discountPercentage: '0',
+  groupId: '',
+  colorName: '',
+  colorHex: '#000000',
   sizesText: '',
   category: '',
   subcategory: '',
   description: '',
-  image: '',
-  images: [],
+  gallery: [],
 }
 
 const bannerInitialState = {
@@ -30,6 +32,8 @@ const bannerInitialState = {
 
 const orderStatuses = ['placed', 'confirmed', 'packed', 'shipped', 'delivered', 'cancelled']
 const paymentStatuses = ['pending', 'paid', 'failed']
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
 function AdminPage({ section = 'dashboard' }) {
   const [products, setProducts] = useState([])
@@ -103,24 +107,83 @@ function AdminPage({ section = 'dashboard' }) {
   }
 
   const handleProductFiles = (event) => {
-    const files = Array.from(event.target.files || []).slice(0, 3)
-    setProductForm((current) => ({ ...current, images: files }))
+    const files = Array.from(event.target.files || [])
+    const validFiles = files.filter((file) => ALLOWED_IMAGE_TYPES.includes(file.type) && file.size <= MAX_IMAGE_BYTES)
+    if (validFiles.length !== files.length) {
+      addToast({ title: 'Only JPG, PNG, WEBP up to 4MB are allowed.', type: 'error' })
+    }
+    setProductForm((current) => ({
+      ...current,
+      gallery: [...current.gallery, ...validFiles.slice(0, 5 - current.gallery.length).map((file, index) => ({
+        id: `${Date.now()}-${index}-${file.name}`,
+        file,
+        preview: URL.createObjectURL(file),
+      }))],
+    }))
+    event.target.value = ''
   }
 
-  const uploadImagesToCloudinary = async (files) => {
-    if (!files || files.length === 0) {
+  const moveGalleryImage = (index, direction) => {
+    setProductForm((current) => {
+      const targetIndex = direction === 'up' ? index - 1 : index + 1
+      if (targetIndex < 0 || targetIndex >= current.gallery.length) {
+        return current
+      }
+      const nextGallery = [...current.gallery]
+      const [moved] = nextGallery.splice(index, 1)
+      nextGallery.splice(targetIndex, 0, moved)
+      return { ...current, gallery: nextGallery }
+    })
+  }
+
+  const removeGalleryImage = (index) => {
+    setProductForm((current) => {
+      const nextGallery = current.gallery.filter((_, imageIndex) => imageIndex !== index)
+      return { ...current, gallery: nextGallery }
+    })
+  }
+
+  const replaceGalleryImage = (index, file) => {
+    if (!file) {
+      return
+    }
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type) || file.size > MAX_IMAGE_BYTES) {
+      addToast({ title: 'Only JPG, PNG, WEBP up to 4MB are allowed.', type: 'error' })
+      return
+    }
+    setProductForm((current) => ({
+      ...current,
+      gallery: current.gallery.map((imageItem, imageIndex) =>
+        imageIndex === index
+          ? { ...imageItem, file, preview: URL.createObjectURL(file), url: undefined }
+          : imageItem,
+      ),
+    }))
+  }
+
+  const uploadImagesToCloudinary = async (galleryItems) => {
+    if (!galleryItems || galleryItems.length === 0) {
       return []
     }
 
     const signatureData = await apiRequest('/uploads/signature', { method: 'POST' })
 
-    const uploads = files.map(async (file) => {
+    const uploads = galleryItems.map(async (galleryItem) => {
+      if (galleryItem?.url && !galleryItem?.file) {
+        return galleryItem.url
+      }
+      const file = galleryItem?.file || galleryItem
+      if (!file) {
+        return ''
+      }
       const formData = new FormData()
       formData.append('file', file)
       formData.append('api_key', signatureData.apiKey)
       formData.append('timestamp', signatureData.timestamp)
       formData.append('signature', signatureData.signature)
       formData.append('folder', signatureData.folder)
+      formData.append('allowed_formats', signatureData.allowedFormats)
+      formData.append('transformation', signatureData.transformation)
 
       const response = await fetch(`https://api.cloudinary.com/v1_1/${signatureData.cloudName}/image/upload`, {
         method: 'POST',
@@ -136,7 +199,7 @@ function AdminPage({ section = 'dashboard' }) {
       return data.secure_url
     })
 
-    return Promise.all(uploads)
+    return (await Promise.all(uploads)).filter(Boolean)
   }
 
   const handleBannerChange = (event) => {
@@ -155,21 +218,27 @@ function AdminPage({ section = 'dashboard' }) {
     setUploadingImages(true)
 
     try {
-      const uploadedImages = productForm.images.length > 0 ? await uploadImagesToCloudinary(productForm.images) : []
-      const existingImages = Array.isArray(productForm.image) ? productForm.image : []
-      const finalImages = uploadedImages.length > 0 ? uploadedImages : existingImages
+      const finalImages = await uploadImagesToCloudinary(productForm.gallery)
+      const defaultImages = finalImages
+
+      if (defaultImages.length === 0) {
+        throw new Error('Add at least one product image.')
+      }
 
       const payload = {
         name: productForm.name,
         price: Number(productForm.price),
         stock: Number(productForm.stock),
         discountPercentage: Number(productForm.discountPercentage || 0),
+        groupId: productForm.groupId.trim(),
+        colorName: productForm.colorName.trim(),
+        colorHex: productForm.colorHex || '',
         sizes: productForm.sizesText.split(',').map((item) => item.trim()).filter(Boolean),
         category: productForm.category,
         subcategory: productForm.subcategory,
         description: productForm.description,
-        images: finalImages,
-        image: finalImages[0] || '',
+        images: defaultImages,
+        image: defaultImages[0] || '',
       }
 
       if (editingProductId) {
@@ -358,13 +427,36 @@ function AdminPage({ section = 'dashboard' }) {
                 <label className="space-y-2"><span className="text-sm font-medium">Discount %</span><input min="0" max="90" type="number" name="discountPercentage" value={productForm.discountPercentage} onChange={handleProductChange} className="min-h-[48px] w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm outline-none" /></label>
                 <label className="space-y-2"><span className="text-sm font-medium">Category</span><input required list="product-categories" name="category" value={productForm.category} onChange={handleProductChange} className="min-h-[48px] w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm outline-none" /></label>
                 <datalist id="product-categories">{productCategories.map((category) => <option key={category} value={category} />)}</datalist>
+                <label className="space-y-2"><span className="text-sm font-medium">Group ID</span><input name="groupId" value={productForm.groupId} onChange={handleProductChange} placeholder="same id for all color variants" className="min-h-[48px] w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm outline-none" /></label>
+                <label className="space-y-2"><span className="text-sm font-medium">Color Name</span><input name="colorName" value={productForm.colorName} onChange={handleProductChange} placeholder="Red" className="min-h-[48px] w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm outline-none" /></label>
+                <label className="space-y-2"><span className="text-sm font-medium">Color Code</span><input type="color" name="colorHex" value={productForm.colorHex || '#000000'} onChange={handleProductChange} className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/5 px-2 text-sm outline-none" /></label>
                 <label className="space-y-2"><span className="text-sm font-medium">Subcategory</span><input list="product-subcategories" name="subcategory" value={productForm.subcategory} onChange={handleProductChange} placeholder={productForm.category === 'Undergarments' ? 'Choose undergarment type' : 'Optional'} className="min-h-[48px] w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm outline-none" /></label>
                 <datalist id="product-subcategories">{(productForm.category === 'Undergarments' ? undergarmentSubcategories : products.map((product) => product.subcategory).filter(Boolean)).map((subcategory) => <option key={subcategory} value={subcategory} />)}</datalist>
                 <label className="space-y-2 sm:col-span-2"><span className="text-sm font-medium">Sizes</span><input name="sizesText" value={productForm.sizesText} onChange={handleProductChange} placeholder="S, M, L, XL" className="min-h-[48px] w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm outline-none" /></label>
                 <label className="space-y-2 sm:col-span-2"><span className="text-sm font-medium">Description</span><textarea name="description" value={productForm.description} onChange={handleProductChange} rows="4" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none" placeholder="Add product details for your direct store." /></label>
-                <label className="space-y-2 sm:col-span-2"><span className="text-sm font-medium">Product Images</span><input type="file" accept="image/*" multiple onChange={handleProductFiles} className="block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none" /><p className="text-xs text-white/45">Upload up to 3 images. New uploads replace the current gallery.</p></label>
-                {Array.isArray(productForm.image) && productForm.image.length > 0 ? <div className="sm:col-span-2 flex flex-wrap gap-3">{productForm.image.map((imageUrl) => <ImageWithFallback key={imageUrl} src={imageUrl} alt="Product preview" className="h-20 w-20 rounded-xl object-cover" />)}</div> : null}
-                {productForm.images.length > 0 ? <div className="sm:col-span-2 flex flex-wrap gap-3 text-xs text-white/60">{productForm.images.map((file) => <span key={file.name} className="rounded-full border border-white/10 bg-white/5 px-3 py-2">{file.name}</span>)}</div> : null}
+                <label className="space-y-2 sm:col-span-2"><span className="text-sm font-medium">Product Images</span><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={handleProductFiles} className="block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none" /><p className="text-xs text-white/45">Upload up to 5 product images. First image is the main image.</p></label>
+                {productForm.gallery.length > 0 ? (
+                  <div className="sm:col-span-2 space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+                    {productForm.gallery.map((imageItem, index) => (
+                      <div key={imageItem.id || imageItem.url || index} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#111113] p-3">
+                        <ImageWithFallback src={imageItem.preview || imageItem.url} alt={`Product preview ${index + 1}`} className="h-16 w-16 rounded-lg object-cover" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm text-white">{index === 0 ? 'Main Image' : `Image ${index + 1}`}</p>
+                          <p className="text-xs text-white/50">{imageItem.file?.name || 'Existing image'}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button type="button" onClick={() => moveGalleryImage(index, 'up')} disabled={index === 0} className="rounded-full border border-white/10 px-3 py-1.5 text-xs disabled:opacity-40">Up</button>
+                          <button type="button" onClick={() => moveGalleryImage(index, 'down')} disabled={index === productForm.gallery.length - 1} className="rounded-full border border-white/10 px-3 py-1.5 text-xs disabled:opacity-40">Down</button>
+                          <label className="rounded-full border border-white/10 px-3 py-1.5 text-xs cursor-pointer hover:bg-white/5">
+                            Replace
+                            <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(event) => replaceGalleryImage(index, event.target.files?.[0])} />
+                          </label>
+                          <button type="button" onClick={() => removeGalleryImage(index)} className="rounded-full border border-red-500/40 px-3 py-1.5 text-xs text-red-300">Remove</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
                 <div className="sm:col-span-2 flex flex-wrap gap-3">
                   <button type="submit" disabled={uploadingImages} className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-gold px-5 text-sm font-semibold uppercase tracking-[0.18em] text-black transition hover:bg-[#e5c17f] disabled:opacity-70">{uploadingImages ? 'Uploading Images...' : editingProductId ? 'Update Product' : 'Add Product'}</button>
                   {editingProductId ? <button type="button" onClick={() => { setEditingProductId(null); setProductForm(productInitialState) }} className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-white/10 px-5 text-sm font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-white/5">Cancel</button> : null}
@@ -374,7 +466,58 @@ function AdminPage({ section = 'dashboard' }) {
 
             <section className="rounded-[1.6rem] border border-white/10 bg-[#141416] p-5 shadow-glow sm:p-6">
               <div className="flex items-end justify-between gap-3"><div><p className="text-sm uppercase tracking-[0.24em] text-gold">Products</p><h2 className="mt-1 font-heading text-3xl text-white">All products</h2></div><span className="text-sm text-white/60">Page {productPagination.page} of {productPagination.totalPages}</span></div>
-              {loading ? <div className="mt-5 grid grid-cols-1 gap-4 min-[430px]:grid-cols-2">{Array.from({ length: 4 }).map((_, index) => <SkeletonCard key={index} />)}</div> : <div className="mt-5 space-y-3">{products.filter((product) => product.category !== 'Saree').map((product) => <div key={product._id} className="flex items-center gap-3 rounded-[1.2rem] border border-white/10 bg-white/5 p-3 sm:p-4"><ImageWithFallback src={(product.images && product.images[0]) || product.image} alt={product.name} className="h-16 w-16 rounded-xl object-cover" /><div className="min-w-0 flex-1"><p className="truncate font-semibold text-white">{product.name}</p><p className="mt-1 text-sm text-white/65">₹{product.price} • Stock {product.stock} • {product.discountPercentage || 0}% OFF</p><p className="mt-1 text-xs text-white/45">{(product.sizes || []).join(', ') || 'No sizes'} • {product.category}{product.subcategory ? ` • ${product.subcategory}` : ''}</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => { setEditingProductId(product._id); setProductForm({ name: product.name, price: String(product.price), stock: String(product.stock ?? 0), discountPercentage: String(product.discountPercentage ?? 0), sizesText: (product.sizes || []).join(', '), category: product.category, subcategory: product.subcategory || '', description: product.description || '', image: product.images?.length ? product.images : product.image ? [product.image] : [], images: [] }) }} className="inline-flex min-h-[42px] items-center justify-center rounded-full border border-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/5">Edit</button><button type="button" onClick={() => handleDeleteProduct(product._id, product.name)} className="inline-flex min-h-[42px] items-center justify-center rounded-full border border-red-500/40 px-4 text-sm font-semibold text-red-400 transition hover:bg-red-500/10">Delete</button></div></div>)}</div>}
+              {loading ? (
+                <div className="mt-5 grid grid-cols-1 gap-4 min-[430px]:grid-cols-2">
+                  {Array.from({ length: 4 }).map((_, index) => <SkeletonCard key={index} />)}
+                </div>
+              ) : (
+                <div className="mt-5 space-y-3">
+                  {products
+                    .filter((product) => product.category !== 'Saree')
+                    .map((product) => (
+                      <div key={product._id} className="flex items-center gap-3 rounded-[1.2rem] border border-white/10 bg-white/5 p-3 sm:p-4">
+                        <ImageWithFallback src={(product.images && product.images[0]) || product.image} alt={product.name} className="h-16 w-16 rounded-xl object-cover" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-white">{product.name}</p>
+                          <p className="mt-1 text-sm text-white/65">₹{product.price} • Stock {product.stock} • {product.discountPercentage || 0}% OFF</p>
+                          <p className="mt-1 text-xs text-white/45">{(product.sizes || []).join(', ') || 'No sizes'} • {product.category}{product.subcategory ? ` • ${product.subcategory}` : ''}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingProductId(product._id)
+                              setProductForm({
+                                name: product.name,
+                                price: String(product.price),
+                                stock: String(product.stock ?? 0),
+                                discountPercentage: String(product.discountPercentage ?? 0),
+                                groupId: product.groupId || '',
+                                colorName: product.colorName || '',
+                                colorHex: product.colorHex || '#000000',
+                                sizesText: (product.sizes || []).join(', '),
+                                category: product.category,
+                                subcategory: product.subcategory || '',
+                                description: product.description || '',
+                                gallery: (product.images?.length ? product.images : product.image ? [product.image] : []).map((imageUrl, index) => ({
+                                  id: `existing-${product._id}-${index}`,
+                                  url: imageUrl,
+                                  preview: imageUrl,
+                                })),
+                              })
+                            }}
+                            className="inline-flex min-h-[42px] items-center justify-center rounded-full border border-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/5"
+                          >
+                            Edit
+                          </button>
+                          <button type="button" onClick={() => handleDeleteProduct(product._id, product.name)} className="inline-flex min-h-[42px] items-center justify-center rounded-full border border-red-500/40 px-4 text-sm font-semibold text-red-400 transition hover:bg-red-500/10">
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
               {productPagination.totalPages > 1 ? <div className="mt-5 flex flex-wrap gap-2">{Array.from({ length: productPagination.totalPages }).map((_, index) => <button key={index + 1} type="button" onClick={() => loadProducts(index + 1)} className={`rounded-full border px-4 py-2 text-sm transition ${productPage === index + 1 ? 'border-gold/60 bg-gold/20 text-white' : 'border-white/10 bg-white/5 text-white/70'}`}>{index + 1}</button>)}</div> : null}
             </section>
           </section>

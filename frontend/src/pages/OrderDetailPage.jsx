@@ -154,6 +154,7 @@ function OrderDetailPage() {
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-white">{item.name}</p>
                   <p className="mt-1 text-sm text-white/60">Qty: {item.quantity}</p>
+                  {item.size ? <p className="mt-1 text-xs text-white/45">Size: {item.size}</p> : null}
                 </div>
                 <p className="text-sm font-semibold text-gold">{currencyFormatter.format(item.price * item.quantity)}</p>
               </div>
