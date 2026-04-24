@@ -34,6 +34,18 @@ const orderStatuses = ['placed', 'confirmed', 'packed', 'shipped', 'delivered', 
 const paymentStatuses = ['pending', 'paid', 'failed']
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+const standardSizeOptions = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL']
+const jeansSizeOptions = Array.from({ length: 15 }, (_, index) => String(index + 26))
+
+function parseSizesText(value) {
+  if (typeof value !== 'string') {
+    return []
+  }
+  return value
+    .split(/[,\n/|]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
 
 function AdminPage({ section = 'dashboard' }) {
   const [products, setProducts] = useState([])
@@ -104,6 +116,17 @@ function AdminPage({ section = 'dashboard' }) {
   const handleProductChange = (event) => {
     const { name, value } = event.target
     setProductForm((current) => ({ ...current, [name]: value }))
+  }
+
+  const toggleProductSize = (sizeValue) => {
+    setProductForm((current) => {
+      const currentSizes = parseSizesText(current.sizesText)
+      const hasSize = currentSizes.includes(sizeValue)
+      const nextSizes = hasSize
+        ? currentSizes.filter((item) => item !== sizeValue)
+        : [...currentSizes, sizeValue]
+      return { ...current, sizesText: nextSizes.join(', ') }
+    })
   }
 
   const handleProductFiles = (event) => {
@@ -233,7 +256,7 @@ function AdminPage({ section = 'dashboard' }) {
         groupId: productForm.groupId.trim(),
         colorName: productForm.colorName.trim(),
         colorHex: productForm.colorHex || '',
-        sizes: productForm.sizesText.split(',').map((item) => item.trim()).filter(Boolean),
+        sizes: parseSizesText(productForm.sizesText),
         category: productForm.category,
         subcategory: productForm.subcategory,
         description: productForm.description,
@@ -349,6 +372,8 @@ function AdminPage({ section = 'dashboard' }) {
     }
   }
 
+  const selectedSizes = useMemo(() => parseSizesText(productForm.sizesText), [productForm.sizesText])
+
   const summaryCards = summary
     ? [
         { label: 'Total Products', value: summary.totalProducts, icon: 'box' },
@@ -432,7 +457,57 @@ function AdminPage({ section = 'dashboard' }) {
                 <label className="space-y-2"><span className="text-sm font-medium">Color Code</span><input type="color" name="colorHex" value={productForm.colorHex || '#000000'} onChange={handleProductChange} className="h-[48px] w-full rounded-2xl border border-white/10 bg-white/5 px-2 text-sm outline-none" /></label>
                 <label className="space-y-2"><span className="text-sm font-medium">Subcategory</span><input list="product-subcategories" name="subcategory" value={productForm.subcategory} onChange={handleProductChange} placeholder={productForm.category === 'Undergarments' ? 'Choose undergarment type' : 'Optional'} className="min-h-[48px] w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm outline-none" /></label>
                 <datalist id="product-subcategories">{(productForm.category === 'Undergarments' ? undergarmentSubcategories : products.map((product) => product.subcategory).filter(Boolean)).map((subcategory) => <option key={subcategory} value={subcategory} />)}</datalist>
-                <label className="space-y-2 sm:col-span-2"><span className="text-sm font-medium">Sizes</span><input name="sizesText" value={productForm.sizesText} onChange={handleProductChange} placeholder="S, M, L, XL" className="min-h-[48px] w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm outline-none" /></label>
+                <label className="space-y-2 sm:col-span-2">
+                  <span className="text-sm font-medium">Sizes</span>
+                  <input name="sizesText" value={productForm.sizesText} onChange={handleProductChange} placeholder="S, M, L, XL or 26, 28, 30" className="min-h-[48px] w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm outline-none" />
+                  <p className="text-xs text-white/45">You can type sizes or tap buttons below to add/remove quickly.</p>
+                  <div className="space-y-3 pt-1">
+                    <div>
+                      <p className="mb-2 text-xs uppercase tracking-[0.14em] text-white/55">Standard sizes</p>
+                      <div className="flex flex-wrap gap-2">
+                        {standardSizeOptions.map((sizeOption) => {
+                          const isSelected = selectedSizes.includes(sizeOption)
+                          return (
+                            <button
+                              key={sizeOption}
+                              type="button"
+                              onClick={() => toggleProductSize(sizeOption)}
+                              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                                isSelected
+                                  ? 'border-gold bg-gold/20 text-white'
+                                  : 'border-white/20 bg-white/5 text-white/80 hover:border-white/40'
+                              }`}
+                            >
+                              {sizeOption}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="mb-2 text-xs uppercase tracking-[0.14em] text-white/55">Jeans sizes (26-40)</p>
+                      <div className="flex flex-wrap gap-2">
+                        {jeansSizeOptions.map((sizeOption) => {
+                          const isSelected = selectedSizes.includes(sizeOption)
+                          return (
+                            <button
+                              key={sizeOption}
+                              type="button"
+                              onClick={() => toggleProductSize(sizeOption)}
+                              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                                isSelected
+                                  ? 'border-gold bg-gold/20 text-white'
+                                  : 'border-white/20 bg-white/5 text-white/80 hover:border-white/40'
+                              }`}
+                            >
+                              {sizeOption}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <label className="space-y-2 sm:col-span-2"><span className="text-sm font-medium">Description</span><textarea name="description" value={productForm.description} onChange={handleProductChange} rows="4" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none" placeholder="Add product details for your direct store." /></label>
                 <label className="space-y-2 sm:col-span-2"><span className="text-sm font-medium">Product Images</span><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={handleProductFiles} className="block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none" /><p className="text-xs text-white/45">Upload up to 5 product images. First image is the main image.</p></label>
                 {productForm.gallery.length > 0 ? (
