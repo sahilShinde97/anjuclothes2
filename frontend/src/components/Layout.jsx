@@ -1,18 +1,137 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import ImageWithFallback from './ImageWithFallback'
+import { apiRequest } from '../lib/api'
 
 const whatsappNumber = import.meta.env.VITE_WHATSAPP_NUMBER || '919614510909'
 const whatsappLink = `https://wa.me/${whatsappNumber}?text=Hello%20ANJU%20CLOTHES%2C%20I%20want%20to%20shop.`
+
+function getBestSearchMatch(products, rawQuery) {
+  const query = rawQuery.trim().toLowerCase()
+  if (!query || products.length === 0) {
+    return null
+  }
+  const exact = products.find((product) => (product.name || '').trim().toLowerCase() === query)
+  if (exact) {
+    return exact
+  }
+  const startsWith = products.find((product) => (product.name || '').trim().toLowerCase().startsWith(query))
+  if (startsWith) {
+    return startsWith
+  }
+  return products[0]
+}
 
 function Layout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [accountOpen, setAccountOpen] = useState(false)
+  const [searchInput, setSearchInput] = useState('')
+  const [searchSuggestions, setSearchSuggestions] = useState([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1)
+  const [searchingSuggestions, setSearchingSuggestions] = useState(false)
+  const desktopSearchContainerRef = useRef(null)
+  const mobileSearchContainerRef = useRef(null)
+  const trimmedSearchInput = useMemo(() => searchInput.trim(), [searchInput])
 
   const handleLogout = () => {
     logout()
     navigate('/')
+  }
+
+  useEffect(() => {
+    if (!trimmedSearchInput) {
+      setSearchSuggestions([])
+      setShowSuggestions(false)
+      setActiveSuggestionIndex(-1)
+      setSearchingSuggestions(false)
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      setSearchingSuggestions(true)
+      try {
+        const params = new URLSearchParams({
+          page: '1',
+          limit: '6',
+          search: trimmedSearchInput,
+        })
+        const data = await apiRequest(`/products?${params.toString()}`)
+        setSearchSuggestions(data.products || [])
+        setShowSuggestions(true)
+        setActiveSuggestionIndex(-1)
+      } catch {
+        setSearchSuggestions([])
+        setShowSuggestions(true)
+      } finally {
+        setSearchingSuggestions(false)
+      }
+    }, 220)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [trimmedSearchInput])
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      const insideDesktop = desktopSearchContainerRef.current?.contains(event.target)
+      const insideMobile = mobileSearchContainerRef.current?.contains(event.target)
+      if (!insideDesktop && !insideMobile) {
+        setShowSuggestions(false)
+        setActiveSuggestionIndex(-1)
+      }
+    }
+
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [])
+
+  const handleSuggestionSelect = (productId) => {
+    setShowSuggestions(false)
+    setActiveSuggestionIndex(-1)
+    setSearchInput('')
+    navigate(`/products/${productId}`)
+  }
+
+  const handleSearchSubmit = (event) => {
+    event.preventDefault()
+    const bestMatch = getBestSearchMatch(searchSuggestions, searchInput)
+    if (bestMatch?._id) {
+      handleSuggestionSelect(bestMatch._id)
+      return
+    }
+    if (trimmedSearchInput) {
+      navigate(`/?search=${encodeURIComponent(trimmedSearchInput)}`)
+      setShowSuggestions(false)
+      setActiveSuggestionIndex(-1)
+    }
+  }
+
+  const handleSearchInputKeyDown = (event) => {
+    if (!showSuggestions || searchSuggestions.length === 0) {
+      return
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setActiveSuggestionIndex((current) => (current + 1) % searchSuggestions.length)
+      return
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setActiveSuggestionIndex((current) => (current <= 0 ? searchSuggestions.length - 1 : current - 1))
+      return
+    }
+
+    if (event.key === 'Enter' && activeSuggestionIndex >= 0) {
+      event.preventDefault()
+      const selectedProduct = searchSuggestions[activeSuggestionIndex]
+      if (selectedProduct?._id) {
+        handleSuggestionSelect(selectedProduct._id)
+      }
+    }
   }
 
   return (
@@ -25,6 +144,49 @@ function Layout() {
             </Link>
             <p className="mt-1 text-xs text-white/45">Simple fashion shopping for women</p>
           </div>
+
+          <form onSubmit={handleSearchSubmit} className="relative hidden w-full max-w-md sm:block" ref={desktopSearchContainerRef}>
+            <input
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              onFocus={() => {
+                if (trimmedSearchInput) {
+                  setShowSuggestions(true)
+                }
+              }}
+              onKeyDown={handleSearchInputKeyDown}
+              placeholder="Search products..."
+              className="min-h-[44px] w-full rounded-full border border-white/10 bg-white/5 px-4 text-sm text-white outline-none"
+            />
+            {showSuggestions ? (
+              <div className="absolute inset-x-0 top-full mt-2 overflow-hidden rounded-2xl border border-white/10 bg-[#111113] shadow-glow">
+                {searchingSuggestions ? (
+                  <div className="px-4 py-3 text-sm text-white/60">Searching...</div>
+                ) : searchSuggestions.length > 0 ? (
+                  <div className="max-h-80 overflow-y-auto">
+                    {searchSuggestions.map((suggestion, index) => (
+                      <button
+                        key={suggestion._id}
+                        type="button"
+                        onClick={() => handleSuggestionSelect(suggestion._id)}
+                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${
+                          activeSuggestionIndex === index ? 'bg-white/10' : 'hover:bg-white/5'
+                        }`}
+                      >
+                        <ImageWithFallback src={(suggestion.images && suggestion.images[0]) || suggestion.image} alt={suggestion.name} className="h-10 w-10 rounded-lg object-cover" />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm text-white">{suggestion.name}</p>
+                          <p className="mt-0.5 text-xs text-gold">₹{suggestion.finalPrice ?? suggestion.discountedPrice ?? suggestion.price}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-4 py-3 text-sm text-white/60">No matching products.</div>
+                )}
+              </div>
+            ) : null}
+          </form>
 
           <nav className="hidden items-center gap-2 sm:flex sm:gap-3">
             <NavLink to="/" className="rounded-full px-4 py-2 text-sm text-white/75 transition hover:text-gold">
@@ -83,6 +245,51 @@ function Layout() {
               </>
             )}
           </nav>
+        </div>
+
+        <div className="mx-auto block max-w-7xl px-4 pb-3 sm:hidden">
+          <form onSubmit={handleSearchSubmit} className="relative" ref={mobileSearchContainerRef}>
+            <input
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              onFocus={() => {
+                if (trimmedSearchInput) {
+                  setShowSuggestions(true)
+                }
+              }}
+              onKeyDown={handleSearchInputKeyDown}
+              placeholder="Search products..."
+              className="min-h-[44px] w-full rounded-full border border-white/10 bg-white/5 px-4 text-sm text-white outline-none"
+            />
+            {showSuggestions ? (
+              <div className="absolute inset-x-0 top-full mt-2 overflow-hidden rounded-2xl border border-white/10 bg-[#111113] shadow-glow">
+                {searchingSuggestions ? (
+                  <div className="px-4 py-3 text-sm text-white/60">Searching...</div>
+                ) : searchSuggestions.length > 0 ? (
+                  <div className="max-h-72 overflow-y-auto">
+                    {searchSuggestions.map((suggestion, index) => (
+                      <button
+                        key={suggestion._id}
+                        type="button"
+                        onClick={() => handleSuggestionSelect(suggestion._id)}
+                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${
+                          activeSuggestionIndex === index ? 'bg-white/10' : 'hover:bg-white/5'
+                        }`}
+                      >
+                        <ImageWithFallback src={(suggestion.images && suggestion.images[0]) || suggestion.image} alt={suggestion.name} className="h-10 w-10 rounded-lg object-cover" />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm text-white">{suggestion.name}</p>
+                          <p className="mt-0.5 text-xs text-gold">₹{suggestion.finalPrice ?? suggestion.discountedPrice ?? suggestion.price}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-4 py-3 text-sm text-white/60">No matching products.</div>
+                )}
+              </div>
+            ) : null}
+          </form>
         </div>
       </header>
 

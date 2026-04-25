@@ -1,11 +1,33 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import ImageWithFallback from '../components/ImageWithFallback'
 import ProductCard from '../components/ProductCard'
 import SkeletonCard from '../components/SkeletonCard'
 import usePageMeta from '../hooks/usePageMeta'
 import { apiRequest } from '../lib/api'
 
+function getBestSearchMatch(products, rawQuery) {
+  const query = rawQuery.trim().toLowerCase()
+  if (!query || products.length === 0) {
+    return null
+  }
+
+  const exact = products.find((product) => (product.name || '').trim().toLowerCase() === query)
+  if (exact) {
+    return exact
+  }
+
+  const startsWith = products.find((product) => (product.name || '').trim().toLowerCase().startsWith(query))
+  if (startsWith) {
+    return startsWith
+  }
+
+  return products[0]
+}
+
 function HomePage({ offersOnly = false }) {
+  const navigate = useNavigate()
+  const location = useLocation()
   const [products, setProducts] = useState([])
   const [banners, setBanners] = useState([])
   const [categories, setCategories] = useState(['All'])
@@ -16,12 +38,17 @@ function HomePage({ offersOnly = false }) {
   const [selectedSort, setSelectedSort] = useState('newest')
   const [searchInput, setSearchInput] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
+  const [searchSuggestions, setSearchSuggestions] = useState([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1)
+  const [searchingSuggestions, setSearchingSuggestions] = useState(false)
   const [bannerIndex, setBannerIndex] = useState(0)
   const [touchStartX, setTouchStartX] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
   const [pagination, setPagination] = useState({ page: 1, hasMore: false })
+  const searchContainerRef = useRef(null)
 
   usePageMeta({
     title: offersOnly ? 'ANJU CLOTHES | Offers' : 'ANJU CLOTHES | Women Fashion Store',
@@ -87,6 +114,7 @@ function HomePage({ offersOnly = false }) {
 
   useEffect(() => {
     const loadInitialData = async () => {
+      const initialSearch = new URLSearchParams(location.search).get('search')?.trim() || ''
       try {
         const bannerData = await apiRequest('/banners')
         setBanners(bannerData.banners || [])
@@ -94,10 +122,57 @@ function HomePage({ offersOnly = false }) {
         setBanners([])
       }
 
-      await loadProducts({ page: 1, append: false, category: 'All', subcategory: 'All', search: '', priceRange: 'all', sort: 'newest' })
+      setSearchInput(initialSearch)
+      setSearchTerm(initialSearch)
+      await loadProducts({ page: 1, append: false, category: 'All', subcategory: 'All', search: initialSearch, priceRange: 'all', sort: 'newest' })
     }
 
     loadInitialData()
+  }, [location.search])
+
+  useEffect(() => {
+    const query = searchInput.trim()
+    if (!query) {
+      setSearchSuggestions([])
+      setShowSuggestions(false)
+      setActiveSuggestionIndex(-1)
+      setSearchingSuggestions(false)
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      setSearchingSuggestions(true)
+      try {
+        const params = new URLSearchParams({
+          page: '1',
+          limit: '6',
+          search: query,
+        })
+        const data = await apiRequest(`/products?${params.toString()}`)
+        setSearchSuggestions(data.products || [])
+        setShowSuggestions(true)
+        setActiveSuggestionIndex(-1)
+      } catch {
+        setSearchSuggestions([])
+        setShowSuggestions(true)
+      } finally {
+        setSearchingSuggestions(false)
+      }
+    }, 220)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [searchInput])
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (!searchContainerRef.current?.contains(event.target)) {
+        setShowSuggestions(false)
+        setActiveSuggestionIndex(-1)
+      }
+    }
+
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
   }, [])
 
   useEffect(() => {
@@ -130,8 +205,49 @@ function HomePage({ offersOnly = false }) {
   const handleSearch = (event) => {
     event.preventDefault()
     const nextSearch = searchInput.trim()
+    const bestMatch = getBestSearchMatch(searchSuggestions, nextSearch)
+    if (bestMatch?._id) {
+      setShowSuggestions(false)
+      setActiveSuggestionIndex(-1)
+      navigate(`/products/${bestMatch._id}`)
+      return
+    }
     setSearchTerm(nextSearch)
+    setShowSuggestions(false)
+    setActiveSuggestionIndex(-1)
     loadProducts({ page: 1, append: false, category: selectedCategory, subcategory: selectedSubcategory, search: nextSearch, priceRange: selectedPriceRange, sort: selectedSort })
+  }
+
+  const handleSuggestionSelect = (productId) => {
+    setShowSuggestions(false)
+    setActiveSuggestionIndex(-1)
+    navigate(`/products/${productId}`)
+  }
+
+  const handleSearchInputKeyDown = (event) => {
+    if (!showSuggestions || searchSuggestions.length === 0) {
+      return
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setActiveSuggestionIndex((current) => (current + 1) % searchSuggestions.length)
+      return
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setActiveSuggestionIndex((current) => (current <= 0 ? searchSuggestions.length - 1 : current - 1))
+      return
+    }
+
+    if (event.key === 'Enter' && activeSuggestionIndex >= 0) {
+      event.preventDefault()
+      const selectedProduct = searchSuggestions[activeSuggestionIndex]
+      if (selectedProduct?._id) {
+        handleSuggestionSelect(selectedProduct._id)
+      }
+    }
   }
 
   const handleCategoryChange = (category) => {
@@ -209,11 +325,17 @@ function HomePage({ offersOnly = false }) {
               {offersOnly ? 'Explore only products with active discounts and offer pricing.' : 'Explore stylish products in a clean, simple, and mobile-friendly shopping experience.'}
             </p>
 
-            <form onSubmit={handleSearch} className="mt-5 max-w-lg">
+            <form onSubmit={handleSearch} className="mt-5 max-w-lg" ref={searchContainerRef}>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <input
                   value={searchInput}
                   onChange={(event) => setSearchInput(event.target.value)}
+                  onFocus={() => {
+                    if (searchInput.trim()) {
+                      setShowSuggestions(true)
+                    }
+                  }}
+                  onKeyDown={handleSearchInputKeyDown}
                   placeholder="Search products..."
                   className="min-h-[48px] flex-1 rounded-full border border-white/10 bg-white/5 px-4 text-sm outline-none"
                 />
@@ -234,6 +356,38 @@ function HomePage({ offersOnly = false }) {
                   </button>
                 )}
               </div>
+              {showSuggestions ? (
+                <div className="mt-2 overflow-hidden rounded-2xl border border-white/10 bg-[#111113] shadow-glow">
+                  {searchingSuggestions ? (
+                    <div className="px-4 py-3 text-sm text-white/60">Searching...</div>
+                  ) : searchSuggestions.length > 0 ? (
+                    <div className="max-h-80 overflow-y-auto">
+                      {searchSuggestions.map((suggestion, index) => (
+                        <button
+                          key={suggestion._id}
+                          type="button"
+                          onClick={() => handleSuggestionSelect(suggestion._id)}
+                          className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${
+                            activeSuggestionIndex === index ? 'bg-white/10' : 'hover:bg-white/5'
+                          }`}
+                        >
+                          <ImageWithFallback
+                            src={(suggestion.images && suggestion.images[0]) || suggestion.image}
+                            alt={suggestion.name}
+                            className="h-12 w-12 rounded-lg object-cover"
+                          />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm text-white">{suggestion.name}</p>
+                            <p className="mt-0.5 text-xs text-gold">₹{suggestion.finalPrice ?? suggestion.discountedPrice ?? suggestion.price}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-3 text-sm text-white/60">No matching products.</div>
+                  )}
+                </div>
+              ) : null}
             </form>
 
             <div className="mt-5 text-sm text-white/55">{pagination.total || products.length} products available</div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 function ImageWithFallback({
   src,
@@ -11,10 +11,29 @@ function ImageWithFallback({
 }) {
   const [failed, setFailed] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const imageRef = useRef(null)
 
   useEffect(() => {
     setFailed(false)
     setLoaded(false)
+  }, [src])
+
+  useEffect(() => {
+    if (!src) {
+      return undefined
+    }
+
+    const imageElement = imageRef.current
+    if (imageElement?.complete && imageElement.naturalWidth > 0) {
+      setLoaded(true)
+      return undefined
+    }
+
+    const fallbackTimer = window.setTimeout(() => {
+      setLoaded(true)
+    }, 1400)
+
+    return () => window.clearTimeout(fallbackTimer)
   }, [src])
 
   if (failed || !src) {
@@ -31,9 +50,10 @@ function ImageWithFallback({
         <div className="absolute inset-0 animate-pulse bg-white/10" aria-hidden="true" />
       ) : null}
       <img
+        ref={imageRef}
         src={src}
         alt={alt}
-        className={`${className} transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        className={`${className} transition-opacity duration-300 opacity-100`}
         onError={() => setFailed(true)}
         onLoad={() => setLoaded(true)}
         loading={loading}

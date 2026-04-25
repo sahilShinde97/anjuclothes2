@@ -87,6 +87,7 @@ function ProductPage() {
     return [current, ...groupProducts].filter((item, index, arr) => arr.findIndex((x) => x._id === item._id) === index)
   }, [groupProducts, product])
   const selectedImage = activeImages[selectedImageIndex] || activeImages[0] || product?.image || ''
+  const hasProductImages = activeImages.length > 0 || Boolean(product?.image)
   const activeStock = product?.stock || 0
   const discountPercentage = product?.discountPercentage || 0
   const discountedPrice = product?.finalPrice ?? product?.discountedPrice ?? product?.price ?? 0
@@ -225,14 +226,22 @@ function ProductPage() {
       <section className="overflow-hidden rounded-[1.8rem] border border-white/10 bg-[#141416] shadow-glow">
         <div className="grid gap-0 lg:grid-cols-[0.95fr_1.05fr]">
           <div className="p-4 sm:p-5">
-            <ImageWithFallback
-              key={selectedImage || activeImages[0] || product.image}
-              loading="eager"
-              fetchPriority="high"
-              src={selectedImage}
-              alt={product.name}
-              className="h-[360px] w-full rounded-[1.3rem] object-cover transition-opacity duration-300 sm:h-[520px]"
-            />
+            {hasProductImages ? (
+              <div className="overflow-hidden rounded-[1.3rem] bg-white/5">
+                <ImageWithFallback
+                  key={selectedImage || activeImages[0] || product.image}
+                  loading="eager"
+                  fetchPriority="high"
+                  src={selectedImage}
+                  alt={product.name}
+                  className="h-[320px] w-full object-cover transition-opacity duration-300 sm:h-[520px]"
+                />
+              </div>
+            ) : (
+              <div className="flex h-[320px] w-full items-center justify-center rounded-[1.3rem] bg-white/5 text-xs uppercase tracking-[0.18em] text-white/50 sm:h-[520px]">
+                No Image
+              </div>
+            )}
             {activeImages?.length > 1 ? (
               <div className="mt-3 grid grid-cols-3 gap-3">
                 {activeImages.map((imageUrl, imageIndex) => (
