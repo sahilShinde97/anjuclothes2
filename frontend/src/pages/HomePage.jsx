@@ -288,6 +288,18 @@ function HomePage({ offersOnly = false }) {
     })
   }
 
+  const handleRetryProducts = () => {
+    loadProducts({
+      page: 1,
+      append: false,
+      category: selectedCategory,
+      subcategory: selectedSubcategory,
+      search: searchTerm,
+      priceRange: selectedPriceRange,
+      sort: selectedSort,
+    })
+  }
+
   const handleBannerTouchStart = (event) => {
     setTouchStartX(event.touches[0].clientX)
   }
@@ -520,7 +532,18 @@ function HomePage({ offersOnly = false }) {
           <div className="text-sm text-white/60">Page {pagination.page || 1}</div>
         </div>
 
-        {error ? <div className="text-red-400">{error}</div> : null}
+        {error ? (
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-red-200">
+            <p className="text-sm">{error}</p>
+            <button
+              type="button"
+              onClick={handleRetryProducts}
+              className="mt-3 inline-flex min-h-[42px] items-center justify-center rounded-full border border-red-400/40 px-4 text-xs font-semibold uppercase tracking-[0.16em] text-red-100 transition hover:bg-red-500/10"
+            >
+              Retry Loading Products
+            </button>
+          </div>
+        ) : null}
 
         {loading ? (
           <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
@@ -549,6 +572,18 @@ function HomePage({ offersOnly = false }) {
               </div>
             ) : null}
           </>
+        ) : error ? (
+          <div className="rounded-[1.5rem] border border-red-500/30 bg-[#1a1113] p-8 text-center">
+            <p className="text-white/80">Products could not be loaded right now.</p>
+            <p className="mt-2 text-sm text-red-200/90">Please check internet connection and retry.</p>
+            <button
+              type="button"
+              onClick={handleRetryProducts}
+              className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-full border border-white/20 px-5 text-sm font-semibold text-white transition hover:bg-white/5"
+            >
+              Retry
+            </button>
+          </div>
         ) : (
           <div className="rounded-[1.5rem] border border-white/10 bg-[#141416] p-8 text-center text-white/65">
             No products found.

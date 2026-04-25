@@ -24,6 +24,9 @@ export { API_BASE_URL }
 
 export async function apiRequest(path, options = {}) {
   const token = getToken()
+  const timeoutMs = options.timeoutMs ?? 15000
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs)
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {}),
@@ -33,10 +36,21 @@ export async function apiRequest(path, options = {}) {
     headers.Authorization = `Bearer ${token}`
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  })
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out. Please check your internet and try again.')
+    }
+    throw new Error('Network error. Please check your internet connection.')
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
 
   const data = await response.json().catch(() => ({}))
 

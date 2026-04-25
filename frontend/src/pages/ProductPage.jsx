@@ -36,6 +36,7 @@ function ProductPage() {
   useEffect(() => {
     const loadProduct = async () => {
       setLoading(true)
+      setError('')
       try {
         const data = await apiRequest(`/products/${id}`)
         setProduct(data.product)
@@ -208,8 +209,15 @@ function ProductPage() {
   if (error || !product) {
     return (
       <main className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
-        <div className="rounded-[1.6rem] border border-white/10 bg-[#141416] p-8 text-center text-white/70">
-          {error || 'Product not found.'}
+        <div className="rounded-[1.6rem] border border-red-500/30 bg-[#1a1113] p-8 text-center text-white/80">
+          <p>{error || 'Product not found.'}</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-full border border-white/20 px-5 text-sm font-semibold text-white transition hover:bg-white/5"
+          >
+            Retry
+          </button>
         </div>
       </main>
     )
