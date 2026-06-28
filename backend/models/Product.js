@@ -106,6 +106,13 @@ const productSchema = new mongoose.Schema(
   { timestamps: true },
 )
 
+productSchema.index({ createdAt: -1 })
+productSchema.index({ category: 1, createdAt: -1 })
+productSchema.index({ category: 1, subcategory: 1 })
+productSchema.index({ discountPercentage: 1, createdAt: -1 })
+productSchema.index({ name: 1 })
+productSchema.index({ price: 1 })
+
 const Product = mongoose.model('Product', productSchema)
 
 export default Product

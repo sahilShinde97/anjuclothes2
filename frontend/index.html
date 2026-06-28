@@ -15,6 +15,11 @@
     <meta name="twitter:image" content="https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1200&q=80" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'" />
+    <noscript>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" />
+    </noscript>
     <title>ANJU CLOTHES</title>
     <style>
       #app-loader {
@@ -28,7 +33,14 @@
         background: #0b0b0c;
         color: #fff;
         z-index: 9999;
-        font-family: "Manrope", sans-serif;
+        font-family: "Manrope", system-ui, -apple-system, sans-serif;
+        opacity: 1;
+        transition: opacity 0.35s ease;
+      }
+
+      #app-loader.app-loader--hide {
+        opacity: 0;
+        pointer-events: none;
       }
 
       .loader-ring {

@@ -4,26 +4,9 @@ import ImageWithFallback from '../components/ImageWithFallback'
 import ProductCard from '../components/ProductCard'
 import SkeletonCard from '../components/SkeletonCard'
 import usePageMeta from '../hooks/usePageMeta'
-import { apiRequest } from '../lib/api'
-
-function getBestSearchMatch(products, rawQuery) {
-  const query = rawQuery.trim().toLowerCase()
-  if (!query || products.length === 0) {
-    return null
-  }
-
-  const exact = products.find((product) => (product.name || '').trim().toLowerCase() === query)
-  if (exact) {
-    return exact
-  }
-
-  const startsWith = products.find((product) => (product.name || '').trim().toLowerCase().startsWith(query))
-  if (startsWith) {
-    return startsWith
-  }
-
-  return products[0]
-}
+import { apiRequest, preloadImage } from '../lib/api'
+import { getOptimizedImageUrl } from '../lib/images'
+import { getBestSearchMatch } from '../lib/search'
 
 function HomePage({ offersOnly = false }) {
   const navigate = useNavigate()
@@ -69,7 +52,7 @@ function HomePage({ offersOnly = false }) {
     { id: 'name_asc', label: 'Name A-Z' },
   ]
 
-  const loadProducts = async ({ page = 1, append = false, category = selectedCategory, subcategory = selectedSubcategory, search = searchTerm, priceRange = selectedPriceRange, sort = selectedSort } = {}) => {
+  const loadProducts = async ({ page = 1, append = false, category = selectedCategory, subcategory = selectedSubcategory, search = searchTerm, priceRange = selectedPriceRange, sort = selectedSort, includeMeta = page === 1 && !append } = {}) => {
     const isFirstLoad = page === 1
     if (isFirstLoad) {
       setLoading(true)
@@ -97,11 +80,16 @@ function HomePage({ offersOnly = false }) {
       if (offersOnly) {
         params.set('offersOnly', 'true')
       }
+      if (!includeMeta) {
+        params.set('includeMeta', 'false')
+      }
 
       const data = await apiRequest(`/products?${params.toString()}`)
       setProducts((current) => (append ? [...current, ...data.products] : data.products))
-      setCategories(data.categories || ['All'])
-      setSubcategories(data.subcategories || ['All'])
+      if (includeMeta) {
+        setCategories(data.categories || ['All'])
+        setSubcategories(data.subcategories || ['All'])
+      }
       setPagination(data.pagination)
       setError('')
     } catch (requestError) {
@@ -115,20 +103,45 @@ function HomePage({ offersOnly = false }) {
   useEffect(() => {
     const loadInitialData = async () => {
       const initialSearch = new URLSearchParams(location.search).get('search')?.trim() || ''
-      try {
-        const bannerData = await apiRequest('/banners')
-        setBanners(bannerData.banners || [])
-      } catch {
-        setBanners([])
-      }
-
       setSearchInput(initialSearch)
       setSearchTerm(initialSearch)
-      await loadProducts({ page: 1, append: false, category: 'All', subcategory: 'All', search: initialSearch, priceRange: 'all', sort: 'newest' })
+
+      const productParams = new URLSearchParams({ page: '1', limit: '8', includeMeta: 'true' })
+      if (initialSearch) {
+        productParams.set('search', initialSearch)
+      }
+      if (offersOnly) {
+        productParams.set('offersOnly', 'true')
+      }
+
+      setLoading(true)
+      try {
+        const [bannerResult, productResult] = await Promise.all([
+          apiRequest('/banners').catch(() => ({ banners: [] })),
+          apiRequest(`/products?${productParams.toString()}`),
+        ])
+
+        const nextBanners = bannerResult.banners || []
+        setBanners(nextBanners)
+        setProducts(productResult.products || [])
+        setCategories(productResult.categories || ['All'])
+        setSubcategories(productResult.subcategories || ['All'])
+        setPagination(productResult.pagination || { page: 1, hasMore: false })
+        setError('')
+
+        const heroImage = nextBanners[0]?.image
+        if (heroImage) {
+          preloadImage(getOptimizedImageUrl(heroImage, { preset: 'banner' }))
+        }
+      } catch (requestError) {
+        setError(requestError.message)
+      } finally {
+        setLoading(false)
+      }
     }
 
     loadInitialData()
-  }, [location.search])
+  }, [location.search, offersOnly])
 
   useEffect(() => {
     const query = searchInput.trim()
@@ -147,6 +160,7 @@ function HomePage({ offersOnly = false }) {
           page: '1',
           limit: '6',
           search: query,
+          includeMeta: 'false',
         })
         const data = await apiRequest(`/products?${params.toString()}`)
         setSearchSuggestions(data.products || [])
@@ -384,9 +398,10 @@ function HomePage({ offersOnly = false }) {
                           }`}
                         >
                           <ImageWithFallback
+                            preset="thumb"
                             src={(suggestion.images && suggestion.images[0]) || suggestion.image}
                             alt={suggestion.name}
-                            className="h-12 w-12 rounded-lg object-cover"
+                            className="h-12 w-12 rounded-lg"
                           />
                           <div className="min-w-0">
                             <p className="truncate text-sm text-white">{suggestion.name}</p>
@@ -414,7 +429,8 @@ function HomePage({ offersOnly = false }) {
                     alt={activeBanner.title}
                     loading="eager"
                     fetchPriority="high"
-                    className="h-[260px] w-full object-cover sm:h-[360px] lg:h-full"
+                    preset="banner"
+                    className="h-[260px] w-full sm:h-[360px] lg:h-full"
                   />
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
@@ -446,7 +462,8 @@ function HomePage({ offersOnly = false }) {
                 alt={featuredProduct.name}
                 loading="eager"
                 fetchPriority="high"
-                className="h-[260px] w-full rounded-[1.4rem] object-cover sm:h-[360px] lg:h-full"
+                preset="banner"
+                className="h-[260px] w-full sm:h-[360px] lg:h-full"
               />
             ) : (
               <div className="flex h-[260px] items-center justify-center rounded-[1.4rem] bg-white/5 text-white/60 sm:h-[360px] lg:h-full">

@@ -1,6 +1,10 @@
 import mongoose from 'mongoose'
 import Product from '../models/Product.js'
+import { getCachedCategories, getCachedSubcategories, invalidateCategoryCache } from '../utils/categoryCache.js'
 import { attachProductPricing, getEffectiveProductImages, getSafeDiscountPercentage } from '../utils/productVariantUtils.js'
+import { clearApiCache } from '../middleware/cacheMiddleware.js'
+
+const LIST_SELECT = '-description -reviews.comment -reviews.user -reviews.createdAt -reviews.name'
 
 function normalizeProductPayload(body) {
   const { name, price, stock, discountPercentage, sizes, image, images, category, subcategory, description, groupId, colorName, colorHex } = body
@@ -24,21 +28,40 @@ function normalizeProductPayload(body) {
   }
 }
 
-function serializeProduct(productDoc) {
+function computeRating(reviews = []) {
+  const ratingCount = reviews.length
+  const ratingAverage = ratingCount > 0
+    ? Number((reviews.reduce((sum, review) => sum + (Number(review.rating) || 0), 0) / ratingCount).toFixed(1))
+    : 0
+
+  return { ratingCount, ratingAverage }
+}
+
+function serializeProduct(productDoc, { includeReviews = true } = {}) {
   const product = productDoc.toObject ? productDoc.toObject() : productDoc
   const images = getEffectiveProductImages(product)
   const image = images[0] || product.image || ''
-  const reviews = Array.isArray(product.reviews) ? product.reviews : []
-  const ratingCount = reviews.length
-  const ratingAverage = ratingCount > 0 ? Number((reviews.reduce((sum, review) => sum + (Number(review.rating) || 0), 0) / ratingCount).toFixed(1)) : 0
-
-  return attachProductPricing({
+  const { ratingCount, ratingAverage } = computeRating(product.reviews)
+  const payload = {
     ...product,
     images,
     image,
     ratingCount,
     ratingAverage,
-  })
+  }
+
+  if (!includeReviews) {
+    delete payload.reviews
+    delete payload.description
+  }
+
+  return attachProductPricing(payload)
+}
+
+function invalidateProductCaches() {
+  clearApiCache('/api/products')
+  clearApiCache('/api/banners')
+  invalidateCategoryCache()
 }
 
 export async function getProducts(req, res, next) {
@@ -52,6 +75,7 @@ export async function getProducts(req, res, next) {
     const priceRange = req.query.priceRange?.trim()
     const offersOnly = req.query.offersOnly === 'true'
     const groupId = req.query.groupId?.trim()
+    const includeMeta = req.query.includeMeta !== 'false'
 
     const filter = {}
 
@@ -94,17 +118,23 @@ export async function getProducts(req, res, next) {
       name_asc: { name: 1 },
     }
 
-    const total = await Product.countDocuments(filter)
-    const products = await Product.find(filter)
-      .sort(sortMap[sort] || sortMap.newest)
-      .skip((page - 1) * limit)
-      .limit(limit)
+    const sortOption = sortMap[sort] || sortMap.newest
+    const skip = (page - 1) * limit
 
-    const categories = (await Product.distinct('category')).filter((categoryName) => categoryName !== 'Saree')
-    const subcategories = category && category !== 'All' ? await Product.distinct('subcategory', { category }) : []
+    const [total, products, categories, subcategories] = await Promise.all([
+      Product.countDocuments(filter),
+      Product.find(filter)
+        .sort(sortOption)
+        .skip(skip)
+        .limit(limit)
+        .select(LIST_SELECT)
+        .lean(),
+      includeMeta ? getCachedCategories() : Promise.resolve(undefined),
+      includeMeta && category && category !== 'All' ? getCachedSubcategories(category) : Promise.resolve(undefined),
+    ])
 
-    res.json({
-      products: products.map((product) => serializeProduct(product)),
+    const response = {
+      products: products.map((product) => serializeProduct(product, { includeReviews: false })),
       pagination: {
         page,
         limit,
@@ -112,9 +142,14 @@ export async function getProducts(req, res, next) {
         totalPages: Math.max(Math.ceil(total / limit), 1),
         hasMore: page * limit < total,
       },
-      categories: ['All', ...categories.sort()],
-      subcategories: ['All', ...subcategories.filter(Boolean).sort()],
-    })
+    }
+
+    if (includeMeta) {
+      response.categories = categories || ['All']
+      response.subcategories = subcategories || ['All']
+    }
+
+    res.json(response)
   } catch (error) {
     next(error)
   }
@@ -122,7 +157,7 @@ export async function getProducts(req, res, next) {
 
 export async function getProductById(req, res, next) {
   try {
-    const product = await Product.findById(req.params.id)
+    const product = await Product.findById(req.params.id).lean()
 
     if (!product) {
       return res.status(404).json({ message: 'Product not found.' })
@@ -137,6 +172,7 @@ export async function getProductById(req, res, next) {
 export async function createProduct(req, res, next) {
   try {
     const product = await Product.create(normalizeProductPayload(req.body))
+    invalidateProductCaches()
     res.status(201).json({ product: serializeProduct(product) })
   } catch (error) {
     next(error)
@@ -155,6 +191,7 @@ export async function updateProduct(req, res, next) {
       return res.status(404).json({ message: 'Product not found.' })
     }
 
+    invalidateProductCaches()
     res.json({ product: serializeProduct(product) })
   } catch (error) {
     next(error)
@@ -169,6 +206,7 @@ export async function deleteProduct(req, res, next) {
       return res.status(404).json({ message: 'Product not found.' })
     }
 
+    invalidateProductCaches()
     res.json({ message: 'Product deleted successfully.' })
   } catch (error) {
     next(error)
@@ -201,6 +239,7 @@ export async function createProductReview(req, res, next) {
     }
 
     await product.save()
+    clearApiCache(`/api/products/${req.params.id}`)
 
     res.status(201).json({ message: 'Review saved.', product: serializeProduct(product) })
   } catch (error) {

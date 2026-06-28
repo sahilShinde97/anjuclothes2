@@ -6,7 +6,8 @@ import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
 import { useToast } from '../context/ToastContext'
 import usePageMeta from '../hooks/usePageMeta'
-import { apiRequest } from '../lib/api'
+import { apiRequest, preloadImage } from '../lib/api'
+import { getOptimizedImageUrl } from '../lib/images'
 import { addRecentlyViewedProduct, getRecentlyViewedProducts } from '../lib/productUx'
 
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -37,30 +38,46 @@ function ProductPage() {
     const loadProduct = async () => {
       setLoading(true)
       setError('')
+      setGroupProducts([])
+      setRelatedProducts([])
+
       try {
         const data = await apiRequest(`/products/${id}`)
-        setProduct(data.product)
+        const nextProduct = data.product
+        setProduct(nextProduct)
         setSelectedImageIndex(0)
-        setSelectedSize(data.product.sizes?.[0] || '')
-        addRecentlyViewedProduct(data.product)
-        setRecentlyViewed(getRecentlyViewedProducts().filter((item) => item._id !== data.product._id))
+        setSelectedSize(nextProduct.sizes?.[0] || '')
+        addRecentlyViewedProduct(nextProduct)
+        setRecentlyViewed(getRecentlyViewedProducts().filter((item) => item._id !== nextProduct._id))
 
-        if (data.product.groupId) {
-          const groupData = await apiRequest(`/products?groupId=${encodeURIComponent(data.product.groupId)}&limit=30&page=1`)
-          setGroupProducts((groupData.products || []).filter((item) => item._id !== data.product._id))
-        } else {
-          setGroupProducts([])
+        const heroImage = nextProduct.images?.[0] || nextProduct.image
+        if (heroImage) {
+          preloadImage(getOptimizedImageUrl(heroImage, { preset: 'hero' }))
         }
 
-        if (data.product.category) {
-          const relatedData = await apiRequest(`/products?category=${encodeURIComponent(data.product.category)}&limit=12&page=1`)
-          setRelatedProducts((relatedData.products || []).filter((item) => item._id !== data.product._id))
-        } else {
-          setRelatedProducts([])
+        setLoading(false)
+
+        const followUpRequests = []
+
+        if (nextProduct.groupId) {
+          followUpRequests.push(
+            apiRequest(`/products?groupId=${encodeURIComponent(nextProduct.groupId)}&limit=30&page=1&includeMeta=false`).then((groupData) => {
+              setGroupProducts((groupData.products || []).filter((item) => item._id !== nextProduct._id))
+            }),
+          )
         }
+
+        if (nextProduct.category) {
+          followUpRequests.push(
+            apiRequest(`/products?category=${encodeURIComponent(nextProduct.category)}&limit=12&page=1&includeMeta=false`).then((relatedData) => {
+              setRelatedProducts((relatedData.products || []).filter((item) => item._id !== nextProduct._id))
+            }),
+          )
+        }
+
+        await Promise.all(followUpRequests)
       } catch (requestError) {
         setError(requestError.message)
-      } finally {
         setLoading(false)
       }
     }
@@ -240,9 +257,10 @@ function ProductPage() {
                   key={selectedImage || activeImages[0] || product.image}
                   loading="eager"
                   fetchPriority="high"
+                  preset="hero"
                   src={selectedImage}
                   alt={product.name}
-                  className="h-[320px] w-full object-cover transition-opacity duration-300 sm:h-[520px]"
+                  className="h-[320px] w-full sm:h-[520px]"
                 />
               </div>
             ) : (
@@ -259,7 +277,7 @@ function ProductPage() {
                     onClick={() => setSelectedImageIndex(imageIndex)}
                     className={`overflow-hidden rounded-xl border transition ${selectedImageIndex === imageIndex ? 'border-gold/70' : 'border-white/10'}`}
                   >
-                    <ImageWithFallback loading="lazy" src={imageUrl} alt={product.name} className="h-24 w-full object-cover" />
+                    <ImageWithFallback loading="lazy" preset="thumb" src={imageUrl} alt={product.name} className="h-24 w-full rounded-xl" />
                   </button>
                 ))}
               </div>
@@ -289,7 +307,7 @@ function ProductPage() {
                         }`}
                         title={item.colorName || 'Color option'}
                       >
-                        {item.colorHex ? <span className="h-full w-full" style={{ backgroundColor: item.colorHex }} /> : <ImageWithFallback src={item.image} alt={item.colorName || 'Color'} className="h-full w-full object-cover" />}
+                        {item.colorHex ? <span className="h-full w-full" style={{ backgroundColor: item.colorHex }} /> : <ImageWithFallback preset="thumb" src={item.image} alt={item.colorName || 'Color'} className="h-full w-full" />}
                       </button>
                     )
                   })}
@@ -388,7 +406,7 @@ function ProductPage() {
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {relatedProducts.slice(0, 8).map((item) => (
               <Link key={item._id} to={`/products/${item._id}`} className="group rounded-xl border border-white/10 bg-white/5 p-2">
-                <ImageWithFallback src={item.images?.[0] || item.image} alt={item.name} className="h-28 w-full rounded-lg object-cover" />
+                <ImageWithFallback preset="card" src={item.images?.[0] || item.image} alt={item.name} className="h-28 w-full rounded-lg" />
                 <p className="mt-2 text-xs text-white/80">{item.name}</p>
               </Link>
             ))}
@@ -402,7 +420,7 @@ function ProductPage() {
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {recentlyViewed.slice(0, 8).map((item) => (
               <Link key={item._id} to={`/products/${item._id}`} className="group rounded-xl border border-white/10 bg-white/5 p-2">
-                <ImageWithFallback src={item.image} alt={item.name} className="h-28 w-full rounded-lg object-cover" />
+                <ImageWithFallback preset="card" src={item.image} alt={item.name} className="h-28 w-full rounded-lg" />
                 <p className="mt-2 text-xs text-white/80">{item.name}</p>
               </Link>
             ))}

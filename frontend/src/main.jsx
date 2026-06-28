@@ -11,10 +11,3 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </BrowserRouter>
   </React.StrictMode>,
 )
-
-window.requestAnimationFrame(() => {
-  const loader = document.getElementById('app-loader')
-  if (loader) {
-    loader.remove()
-  }
-})

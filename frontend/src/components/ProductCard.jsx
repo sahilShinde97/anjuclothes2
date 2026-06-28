@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ImageWithFallback from './ImageWithFallback'
 import { getWishlistIds, toggleWishlistId } from '../lib/productUx'
@@ -31,7 +31,13 @@ function ProductCard({ product }) {
     <article className="group overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#141416] shadow-glow transition duration-300 hover:-translate-y-1 hover:scale-[1.01] hover:border-gold/50">
       <Link to={`/products/${product._id}`} className="block w-full text-left">
         <div className="relative aspect-[4/5] overflow-hidden">
-          <ImageWithFallback loading="lazy" src={defaultImage} alt={product.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+          <ImageWithFallback
+            loading="lazy"
+            preset="card"
+            src={defaultImage}
+            alt={product.name}
+            className="h-full w-full"
+          />
           {discountPercentage > 0 ? <span className="absolute left-3 top-3 rounded-full bg-red-500 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white">{discountPercentage}% OFF</span> : null}
           <button
             type="button"
@@ -77,4 +83,4 @@ function ProductCard({ product }) {
   )
 }
 
-export default ProductCard
+export default memo(ProductCard)

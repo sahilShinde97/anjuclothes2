@@ -3,25 +3,10 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import ImageWithFallback from './ImageWithFallback'
 import { apiRequest } from '../lib/api'
+import { getBestSearchMatch } from '../lib/search'
 
 const whatsappNumber = import.meta.env.VITE_WHATSAPP_NUMBER || '919614510909'
 const whatsappLink = `https://wa.me/${whatsappNumber}?text=Hello%20ANJU%20CLOTHES%2C%20I%20want%20to%20shop.`
-
-function getBestSearchMatch(products, rawQuery) {
-  const query = rawQuery.trim().toLowerCase()
-  if (!query || products.length === 0) {
-    return null
-  }
-  const exact = products.find((product) => (product.name || '').trim().toLowerCase() === query)
-  if (exact) {
-    return exact
-  }
-  const startsWith = products.find((product) => (product.name || '').trim().toLowerCase().startsWith(query))
-  if (startsWith) {
-    return startsWith
-  }
-  return products[0]
-}
 
 function Layout() {
   const { user, logout } = useAuth()
@@ -57,6 +42,7 @@ function Layout() {
           page: '1',
           limit: '6',
           search: trimmedSearchInput,
+          includeMeta: 'false',
         })
         const data = await apiRequest(`/products?${params.toString()}`)
         setSearchSuggestions(data.products || [])
@@ -173,7 +159,7 @@ function Layout() {
                           activeSuggestionIndex === index ? 'bg-white/10' : 'hover:bg-white/5'
                         }`}
                       >
-                        <ImageWithFallback src={(suggestion.images && suggestion.images[0]) || suggestion.image} alt={suggestion.name} className="h-10 w-10 rounded-lg object-cover" />
+                        <ImageWithFallback preset="thumb" src={(suggestion.images && suggestion.images[0]) || suggestion.image} alt={suggestion.name} className="h-10 w-10 rounded-lg" />
                         <div className="min-w-0">
                           <p className="truncate text-sm text-white">{suggestion.name}</p>
                           <p className="mt-0.5 text-xs text-gold">₹{suggestion.finalPrice ?? suggestion.discountedPrice ?? suggestion.price}</p>
@@ -276,7 +262,7 @@ function Layout() {
                           activeSuggestionIndex === index ? 'bg-white/10' : 'hover:bg-white/5'
                         }`}
                       >
-                        <ImageWithFallback src={(suggestion.images && suggestion.images[0]) || suggestion.image} alt={suggestion.name} className="h-10 w-10 rounded-lg object-cover" />
+                        <ImageWithFallback preset="thumb" src={(suggestion.images && suggestion.images[0]) || suggestion.image} alt={suggestion.name} className="h-10 w-10 rounded-lg" />
                         <div className="min-w-0">
                           <p className="truncate text-sm text-white">{suggestion.name}</p>
                           <p className="mt-0.5 text-xs text-gold">₹{suggestion.finalPrice ?? suggestion.discountedPrice ?? suggestion.price}</p>

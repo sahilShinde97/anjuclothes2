@@ -6,7 +6,10 @@ async function connectDB() {
   }
 
   try {
-    await mongoose.connect(process.env.MONGODB_URI)
+    await mongoose.connect(process.env.MONGODB_URI, {
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 10000,
+    })
     console.log('MongoDB connected')
   } catch (error) {
     throw new Error(`MongoDB connection failed: ${error.message}`)

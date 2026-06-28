@@ -1,3 +1,4 @@
+import compression from 'compression'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import express from 'express'
@@ -39,6 +40,7 @@ if (process.env.NODE_ENV === 'production') {
   }
 }
 app.use(helmet())
+app.use(compression())
 const allowedOrigins = parseAllowedOrigins()
 app.use(
   cors({
